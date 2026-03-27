@@ -53,14 +53,8 @@
     .step-up:hover { filter: brightness(1.1); transform: translateY(-8px); }
     .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     img { font-size: 0; }
-    /* FIX: pb-safe thực sự dùng env() cho iPhone notch */
     .pb-safe { padding-bottom: max(80px, calc(60px + env(safe-area-inset-bottom))); }
-
-    /* PDF hidden area */
     .print-area { display: none; position: absolute; left: -9999px; top: 0; width: 794px; }
-
-    /* Virtual scroll container */
-    .virtual-scroll-outer { overflow-y: auto; }
   </style>
 </head>
 <body class="dark">
@@ -79,7 +73,7 @@
       { id:'gbuzz_3', name:"G PARTNER", positioning:"Đồng hành", goal:"Xây dựng ảnh hưởng dài hạn", items:["Chiến lược nội dung chuyên sâu","Quản trị 1-2 kênh","Hàng triệu tương tác định hướng Thương hiệu.","Miễn phí chi phí quản lý Quảng cáo.","Báo cáo số liệu chuyên nghiệp"], price:100000000, time:"30 ngày", isGbuzz:true }
     ];
 
-    const MOCK_INFLUENCERS = Array.from({ length: 300 }, (_, i) => {
+    const MOCK_INFLUENCERS = Array.from({ length: 10 }, (_, i) => {
       const suppliers  = ["GDL","YAN","DAN","RAD","OTHER"];
       const platforms  = ["Facebook Page","Facebook Group","TikTok","Youtube"];
       const categories = ["Âm nhạc","Làm đẹp","Ẩm thực","Công nghệ","Đời sống"];
@@ -90,12 +84,11 @@
         platform: platforms[i % platforms.length],
         price_post: 10000000+(i*100000), price_video: 20000000+(i*200000),
         followers: 500000+(i*50000),
-        bio:`Mô tả ngắn gọn về KOL ${i+1}.`,
+        bio:`Dữ liệu đang được tải từ Demo vì không nhận diện được Header Google Sheet.`,
         image:`https://api.dicebear.com/7.x/avataaars/svg?seed=KOL${i}`, link:"#"
       };
     });
 
-    // ─── FIX #1: Static SVG icons — không dùng lucide DOM manipulation ───
     const ICONS = {
       search: `<svg xmlns="http://www.w3.org/2000/svg" width="VAR_SIZE" height="VAR_SIZE" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>`,
       filter: `<svg xmlns="http://www.w3.org/2000/svg" width="VAR_SIZE" height="VAR_SIZE" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>`,
@@ -125,7 +118,14 @@
       );
     };
 
-    // ─── CountUp ───
+    const safeStr = (v) => (v === null || v === undefined) ? "" : String(v).trim();
+    const safeNum = (v) => { const n = Number(v); return isFinite(n) ? n : 0; };
+    const formatVND = (v) => new Intl.NumberFormat('vi-VN', { style:'currency', currency:'VND' }).format(safeNum(v));
+    const fmtNum = (n) => {
+      const num = safeNum(n);
+      return num >= 1000000 ? (num/1000000).toFixed(1)+'M' : num >= 1000 ? (num/1000).toFixed(0)+'k' : String(num);
+    };
+
     const CountUp = ({ end, duration = 1200, formatter }) => {
       const [count, setCount] = useState(0);
       const ref = useRef(null);
@@ -159,193 +159,190 @@
       </div>
     );
 
-    // ─── FIX #2: Virtual List — chỉ render rows đang visible ───
-    const CARD_HEIGHT_MOBILE  = 380; // px ước tính mỗi card
-    const COLS_MOBILE         = 2;
-    const CARD_HEIGHT_DESKTOP = 420;
-    const COLS_DESKTOP        = 4;
-    const OVERSCAN            = 3;   // số rows buffer trên/dưới
-
-    const VirtualGrid = ({ items, renderItem, theme }) => {
-      const containerRef = useRef(null);
-      const [scrollTop, setScrollTop]   = useState(0);
-      const [viewHeight, setViewHeight] = useState(600);
-      const [cols, setCols]             = useState(COLS_DESKTOP);
-      const cardH = cols === COLS_MOBILE ? CARD_HEIGHT_MOBILE : CARD_HEIGHT_DESKTOP;
-
-      useEffect(() => {
-        const el = containerRef.current;
-        if (!el) return;
-        const ro = new ResizeObserver(([e]) => {
-          setViewHeight(e.contentRect.height);
-          setCols(e.contentRect.width < 640 ? COLS_MOBILE : e.contentRect.width < 1024 ? 2 : e.contentRect.width < 1280 ? 3 : 4);
-        });
-        ro.observe(el);
-        return () => ro.disconnect();
-      }, []);
-
-      const onScroll = useCallback((e) => setScrollTop(e.currentTarget.scrollTop), []);
-
-      const rowCount   = Math.ceil(items.length / cols);
-      const totalH     = rowCount * cardH;
-      const startRow   = Math.max(0, Math.floor(scrollTop / cardH) - OVERSCAN);
-      const endRow     = Math.min(rowCount - 1, Math.ceil((scrollTop + viewHeight) / cardH) + OVERSCAN);
-      const visibleRows = [];
-      for (let r = startRow; r <= endRow; r++) visibleRows.push(r);
-
-      return (
-        <div
-          ref={containerRef}
-          className="virtual-scroll-outer"
-          style={{ height: 'calc(100vh - 220px)', minHeight: 400 }}
-          onScroll={onScroll}
-        >
-          <div style={{ height: totalH, position: 'relative' }}>
-            {visibleRows.map(rowIdx => {
-              const rowItems = items.slice(rowIdx * cols, rowIdx * cols + cols);
-              return (
-                <div
-                  key={rowIdx}
-                  style={{
-                    position: 'absolute',
-                    top: rowIdx * cardH,
-                    left: 0, right: 0,
-                    display: 'grid',
-                    gridTemplateColumns: `repeat(${cols}, 1fr)`,
-                    gap: cols === COLS_MOBILE ? '12px' : '24px',
-                    padding: '0 4px',
-                  }}
-                >
-                  {rowItems.map(item => renderItem(item))}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      );
-    };
-
-    // ─── App ───
     function App() {
-      const [theme, setTheme]                   = useState('dark');
-      const [view, setView]                     = useState('home');
-      const [influencers, setInfluencers]       = useState([]);
-      const [cart, setCart]                     = useState([]);
-      const [loading, setLoading]               = useState(true);
-      const [searchTerm, setSearchTerm]         = useState('');
+      const [theme, setTheme] = useState('dark');
+      const [view, setView] = useState('home'); 
+      const [influencers, setInfluencers] = useState([]);
+      const [cart, setCart] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [searchTerm, setSearchTerm] = useState('');
       const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-      const [isCategoryOpen, setIsCategoryOpen] = useState(false);
-      const [filters, setFilters]               = useState({ category:'', platform:'', maxPrice:50000000, minFollowers:0 });
-      const [toast, setToast]                   = useState(null);
-      const [logoError, setLogoError]           = useState(false);
-      const [isExporting, setIsExporting]       = useState(false);
+      const [isCategoryOpen, setIsCategoryOpen] = useState(false); 
+      const [filters, setFilters] = useState({ category: '', platform: '', maxPrice: 50000000, minFollowers: 0 });
+      const [toast, setToast] = useState(null);
+      const [logoError, setLogoError] = useState(false);
+      const [isExporting, setIsExporting] = useState(false);
 
-      const printAreaRef = useRef(null);
-      const categoryRef  = useRef(null);
+      const categoryRef = useRef(null);
+      const printAreaRef = useRef();
 
       const dynamicCategories = useMemo(() => [...new Set(influencers.map(i => safeStr(i.category)).filter(Boolean))], [influencers]);
 
       useEffect(() => {
-        if (typeof google !== 'undefined' && google.script) {
-          // Chạy trong Apps Script WebApp
-          google.script.run
-            .withSuccessHandler((res) => {
-              try { setInfluencers(JSON.parse(res)); } catch(e) { setInfluencers([]); }
-              setLoading(false);
-            })
-            .withFailureHandler(() => setLoading(false))
-            .getInfluencers();
-        } else {
-          // Chạy trên GitHub Pages — fetch trực tiếp Google Sheets public
-          const SHEET_ID = '1_q6tV2YDfxVWs8AJQnfpJ-RCXpuIrKULYDPE1BUwJNg';
-          const GID      = '1440615790';
-          const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${GID}`;
+        // --- SMART DATA FETCHER ---
+        const sheetId = '1_q6tV2YDfxVWs8AJQnfpJ-RCXpuIrKULYDPE1BUwJNg'; 
+        const gid = '1440615790'; 
+        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=${gid}`;
 
-          fetch(url)
-            .then(res => res.text())
-            .then(text => {
-              const match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]+?)\);?\s*$/);
-              if (!match) throw new Error('Parse failed');
-              const json    = JSON.parse(match[1]);
-              const cols    = json.table.cols;
-              const rows    = json.table.rows;
-              const headers = cols.map(c => (c.label || '').toString().toLowerCase().trim().replace(/\s+/g, '_'));
-              const result  = rows
-                .map((row, idx) => {
-                  const obj = { id: idx + 1 };
-                  (row.c || []).forEach((cell, i) => {
-                    const key = headers[i];
-                    if (!key) return;
-                    let val = cell ? cell.v : null;
-                    if (['followers','price_post','price_video','id'].includes(key)) {
-                      val = safeNum(val);
-                    } else {
-                      val = safeStr(val);
-                    }
-                    obj[key] = val;
+        fetch(url)
+          .then(res => res.text())
+          .then(text => {
+            const match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]+)\);/);
+            if (match && match[1]) {
+              const json = JSON.parse(match[1]);
+              
+              let allRows = json.table.rows.map(r => r.c.map(cell => cell ? (cell.v !== null && cell.v !== undefined ? cell.v : (cell.f || '')) : ''));
+              
+              const colLabels = json.table.cols.map(c => c.label || '');
+              if (colLabels.some(l => l !== '')) {
+                  allRows.unshift(colLabels);
+              }
+
+              let headerRowIndex = 0;
+              let maxMatchScore = -1;
+              const keywords = ['tên', 'name', 'kol', 'kênh', 'giá', 'price', 'booking', 'nền tảng', 'platform', 'link', 'url', 'ngành', 'category', 'follow', 'sub', 'cung cấp', 'supplier', 'đơn vị'];
+
+              allRows.slice(0, 20).forEach((row, idx) => {
+                  let score = 0;
+                  row.forEach(cell => {
+                      const val = String(cell).toLowerCase();
+                      keywords.forEach(kw => {
+                          if (val.includes(kw)) score++;
+                      });
                   });
-                  return obj;
-                })
-                .filter(obj => safeStr(obj.name) !== '');
-              setInfluencers(result.length > 0 ? result : MOCK_INFLUENCERS);
-            })
-            .catch(err => {
-              console.warn('Sheet fetch error, using mock:', err);
+                  if (score > maxMatchScore) {
+                      maxMatchScore = score;
+                      headerRowIndex = idx;
+                  }
+              });
+
+              const rawHeaders = allRows[headerRowIndex] || [];
+              const dataRows = allRows.slice(headerRowIndex + 1);
+
+              const headers = rawHeaders.map((label, i) => {
+                let l = String(label).toLowerCase().trim();
+                if (l.includes('name') || l.includes('tên') || l.includes('kênh') || l.includes('kol') || l.includes('sản phẩm')) return 'name';
+                if (l.includes('sup') || l.includes('cung cấp') || l.includes('đơn vị') || l.includes('nguồn')) return 'supplier';
+                if (l.includes('cat') || l.includes('ngành') || l.includes('lĩnh vực') || l.includes('chuyên mục')) return 'category';
+                if (l.includes('plat') || l.includes('nền tảng') || l.includes('format') || l.includes('loại')) return 'platform';
+                if (l.includes('video')) return 'price_video';
+                if (l.includes('price') || l.includes('giá') || l.includes('booking') || l.includes('chi phí') || l.includes('cost')) return 'price_post';
+                if (l.includes('follow') || l.includes('theo dõi') || l.includes('thành viên') || l.includes('member') || l.includes('sub')) return 'followers';
+                if (l.includes('bio') || l.includes('mô tả') || l.includes('ghi chú') || l.includes('desc')) return 'bio';
+                if (l.includes('image') || l.includes('ảnh') || l.includes('hình') || l.includes('pic') || l.includes('avatar')) return 'image';
+                if (l.includes('link') || l.includes('url')) return 'link';
+                return l || `col_${i}`;
+              });
+              
+              const result = [];
+              dataRows.forEach((row, rowIndex) => {
+                let obj = {};
+                let hasData = false;
+                
+                row.forEach((value, index) => {
+                  const colName = headers[index];
+                  if (colName && !colName.startsWith('col_')) {
+                    let v = value;
+                    
+                    if (['followers', 'price_post', 'price_video'].includes(colName)) {
+                       if (typeof v === 'string') v = v.replace(/[^0-9]/g, '');
+                       v = Number(v) || 0;
+                    } else if (colName === 'link' || colName === 'image') {
+                       v = v ? String(v) : "#";
+                    }
+                    
+                    obj[colName] = v;
+                    if (v !== '' && v !== null && v !== 0 && v !== '#') hasData = true;
+                  }
+                });
+                
+                if (!obj.id) obj.id = rowIndex + 1;
+                if (!obj.name) obj.name = `KOL/Kênh ${obj.id}`; 
+                
+                if (hasData) result.push(obj);
+              });
+              
+              if (result.length > 0) {
+                setInfluencers(result);
+              } else {
+                console.error("Sheet trống hoặc không tìm thấy cột dữ liệu khớp. Headers tìm được:", headers);
+                setInfluencers(MOCK_INFLUENCERS);
+              }
+            } else {
               setInfluencers(MOCK_INFLUENCERS);
-            })
-            .finally(() => setLoading(false));
-        }
+            }
+          })
+          .catch(err => {
+            console.error("Lỗi fetch sheet: ", err);
+            setInfluencers(MOCK_INFLUENCERS);
+          })
+          .finally(() => {
+            setLoading(false);
+          });
       }, []);
 
       const toggleTheme = () => {
-        const next = theme === 'dark' ? 'light' : 'dark';
-        setTheme(next);
-        document.documentElement.setAttribute('data-theme', next);
-        if (next === 'dark') document.documentElement.classList.add('dark');
+        const nextTheme = theme === 'dark' ? 'light' : 'dark';
+        setTheme(nextTheme);
+        document.documentElement.setAttribute('data-theme', nextTheme);
+        if (nextTheme === 'dark') document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
         setLogoError(false);
       };
 
-      const showNotify = useCallback((message, type = 'success') => {
-        setToast({ message, type });
-        setTimeout(() => setToast(null), 3000);
-      }, []);
+      const updateCartItem = (id, fields) => {
+        setCart(prev => prev.map(item => {
+          if (item.id === id) {
+            const updated = { ...item, ...fields };
+            if (fields.format) updated.selectedPrice = fields.format === 'Air video' ? item.price_video : item.price_post;
+            return updated;
+          }
+          return item;
+        }));
+      };
 
-      // ─── FIX #3: GBUZZ Trial — không dùng setCart bên trong useEffect phụ thuộc cart ───
-      // Dùng functional update + ref để tránh vòng lặp vô hạn
       const trialAddedRef = useRef(false);
 
       useEffect(() => {
-        const trialEligibleSuppliers = ['GDL','YAN','DAN','RAD'];
-        const eligibleCount = cart
-          .filter(item => item.id !== 'gbuzz_free' && trialEligibleSuppliers.includes(safeStr(item.supplier).toUpperCase()))
-          .reduce((acc, curr) => acc + safeNum(curr.quantity || 1), 0);
-
+        const trialEligibleSuppliers = ['GDL', 'YAN', 'DAN', 'RAD'];
+        const eligibleItems = cart.filter(item => trialEligibleSuppliers.includes(safeStr(item.supplier).toUpperCase()) && item.id !== 'gbuzz_free');
+        const eligibleCount = eligibleItems.reduce((acc, curr) => acc + safeNum(curr.quantity || 1), 0);
+        
         const hasTrial = cart.some(item => item.id === 'gbuzz_free');
-
+        
         if (eligibleCount >= 2 && !hasTrial && !trialAddedRef.current) {
           trialAddedRef.current = true;
           setCart(prev => {
             if (prev.some(i => i.id === 'gbuzz_free')) return prev;
-            return [...prev, { id:'gbuzz_free', name:"GBUZZ TRIAL", supplier:"GDL", selectedPrice:0, quantity:1, format:"FREE", desc:"Tặng 3000 Tương tác + 50 comment cho mỗi post", isGbuzz:true }];
+            return [...prev, { id: 'gbuzz_free', name: "GBUZZ TRIAL", supplier: "GDL", selectedPrice: 0, quantity: 1, format: "FREE", desc: "Tặng 3000 Tương tác + 50 comment cho mỗi post", isGbuzz: true }];
           });
           showNotify("✨ Chúc mừng! Bạn nhận được GBUZZ TRIAL");
         } else if (eligibleCount < 2 && hasTrial) {
           trialAddedRef.current = false;
           setCart(prev => prev.filter(item => item.id !== 'gbuzz_free'));
         }
-      }, [cart, showNotify]);
+      }, [cart]);
 
-      const updateCartItem = (id, fields) => {
-        setCart(prev => prev.map(item => {
-          if (item.id !== id) return item;
-          const updated = { ...item, ...fields };
-          if (fields.format) {
-            // FIX #5: nhất quán format name
-            updated.selectedPrice = fields.format === 'Air video' ? item.price_video : item.price_post;
-          }
-          return updated;
-        }));
+      const showNotify = useCallback((message, type = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3000);
+      }, []);
+
+      const handleExportPDF = async () => {
+        if (cart.length === 0) return;
+        setIsExporting(true);
+        try {
+          await new Promise(r => setTimeout(r, 600));
+          const element = printAreaRef.current;
+          element.style.display = 'block';
+          const canvas = await window.html2canvas(element, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
+          const imgData = canvas.toDataURL('image/png');
+          const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4');
+          pdf.addImage(imgData, 'PNG', 0, 0, 210, (canvas.height * 210) / canvas.width);
+          pdf.save(`GDL_BaoGia_${new Date().getTime()}.pdf`);
+          element.style.display = 'none';
+          showNotify("Đã tải báo giá!");
+        } catch (error) { showNotify("Lỗi PDF", "error"); } finally { setIsExporting(false); }
       };
 
       const addToCart = (item) => {
@@ -353,85 +350,89 @@
           if (prev.find(i => String(i.id) === String(item.id))) return prev;
           showNotify(`Đã thêm ${item.name}`);
           const price = item.price !== undefined ? item.price : (item.price_post || 0);
-          return [...prev, { ...item, quantity:1, selectedPrice:price, format: item.isGbuzz ? 'Package' : 'Air post' }];
+          return [...prev, { ...item, quantity: 1, selectedPrice: price, format: item.isGbuzz ? 'Package' : 'Air post' }];
         });
       };
 
       const removeFromCart = (id) => setCart(prev => prev.filter(item => item.id !== id));
 
-      // ── SAFE HELPERS: chống crash khi data từ sheet bị null/number/undefined ──
-      const safeStr  = (v) => (v === null || v === undefined) ? "" : String(v).trim();
-      const safeNum  = (v) => { const n = Number(v); return isFinite(n) ? n : 0; };
-      const formatVND = (v) => new Intl.NumberFormat('vi-VN', { style:'currency', currency:'VND' }).format(safeNum(v));
-      const fmtNum = (n) => {
-        const num = safeNum(n);
-        return num >= 1000000 ? (num/1000000).toFixed(1)+'M' : num >= 1000 ? (num/1000).toFixed(0)+'k' : String(num);
+      const copyToClipboard = (text) => {
+        const dummy = document.createElement("input");
+        document.body.appendChild(dummy); dummy.value = text; dummy.select();
+        document.execCommand("copy"); document.body.removeChild(dummy);
+        showNotify("Đã sao chép link!");
       };
 
       const filteredData = useMemo(() => {
         const term = safeStr(searchTerm).toLowerCase();
         return influencers.filter(inf => {
           try {
-            const matchSearch    = safeStr(inf.name).toLowerCase().includes(term);
-            const matchCat       = filters.category ? safeStr(inf.category) === filters.category : true;
-            const matchPlat      = filters.platform  ? safeStr(inf.platform)  === filters.platform  : true;
-            const matchPrice     = safeNum(inf.price_post) <= filters.maxPrice;
-            const matchFollowers = filters.minFollowers === 10000000
-              ? safeNum(inf.followers) >= 10000000
-              : safeNum(inf.followers) >= filters.minFollowers;
+            const matchSearch = safeStr(inf.name).toLowerCase().includes(term);
+            const matchCat = filters.category ? safeStr(inf.category) === filters.category : true;
+            const matchPlat = filters.platform ? safeStr(inf.platform) === filters.platform : true;
+            const matchPrice = safeNum(inf.price_post) <= filters.maxPrice;
+            const matchFollowers = filters.minFollowers === 10000000 ? safeNum(inf.followers) >= 10000000 : safeNum(inf.followers) >= filters.minFollowers;
             return matchSearch && matchCat && matchPlat && matchPrice && matchFollowers;
           } catch(e) { return false; }
         });
       }, [influencers, searchTerm, filters]);
 
-      const systemStats = useMemo(() => ({
-        totalKols:      filteredData.length,
-        totalFollowers: filteredData.reduce((s,i) => s + safeNum(i.followers), 0),
-        totalCats:      [...new Set(filteredData.map(i => safeStr(i.category)).filter(Boolean))].length,
-      }), [filteredData]);
+      const systemStats = useMemo(() => {
+        const totalKols = filteredData.length;
+        const totalFollowers = filteredData.reduce((sum, i) => sum + safeNum(i.followers), 0);
+        const totalCats = [...new Set(filteredData.map(i => safeStr(i.category)).filter(Boolean))].length;
+        return { totalKols, totalFollowers, totalCats };
+      }, [filteredData]);
 
-      // ─── Discount logic ───
-      const promoEligibleSuppliers = ['GDL','YAN','DAN','RAD'];
-      const promoEligiblePlatforms = ['FACEBOOK GROUP','FACEBOOK PAGE'];
-      let promoTotalQuantity = 0, totalDiscountAmount = 0, totalRaw = 0, promoSubtotal = 0;
+      // --- LOGIC CHIẾT KHẤU "MUA NHIỀU GIẢM ĐẬM" HOÀN CHỈNH ---
+      const promoEligibleSuppliers = ['GDL', 'YAN', 'DAN', 'RAD'];
+      const promoEligiblePlatforms = ['FACEBOOK GROUP', 'FACEBOOK PAGE'];
+      
+      let promoTotalQuantity = 0;
+      let totalDiscountAmount = 0;
+      let totalRaw = 0;
+      let promoSubtotal = 0;
 
       cart.forEach(item => {
         const itemTotal = safeNum(item.selectedPrice) * safeNum(item.quantity || 1);
         totalRaw += itemTotal;
+
         if (item.id === 'gbuzz_free') return;
-        const sup  = safeStr(item.supplier).toUpperCase();
+        const sup = safeStr(item.supplier).toUpperCase();
         const plat = safeStr(item.platform).toUpperCase();
+        
         if (promoEligibleSuppliers.includes(sup) && promoEligiblePlatforms.includes(plat)) {
           promoTotalQuantity += safeNum(item.quantity || 1);
-          promoSubtotal += itemTotal;
+          promoSubtotal += itemTotal; 
         }
       });
 
       let baseDiscountRate = 0;
-      if      (promoTotalQuantity >= 21) baseDiscountRate = 0.25;
+      if (promoTotalQuantity >= 21) baseDiscountRate = 0.25;
       else if (promoTotalQuantity >= 11) baseDiscountRate = 0.20;
-      else if (promoTotalQuantity >=  6) baseDiscountRate = 0.15;
-      else if (promoTotalQuantity >=  2) baseDiscountRate = 0.10;
+      else if (promoTotalQuantity >= 6) baseDiscountRate = 0.15;
+      else if (promoTotalQuantity >= 2) baseDiscountRate = 0.10;
 
       cart.forEach(item => {
         if (item.id === 'gbuzz_free') return;
-        const sup  = safeStr(item.supplier).toUpperCase();
+        const sup = safeStr(item.supplier).toUpperCase();
         const plat = safeStr(item.platform).toUpperCase();
+        
         if (promoEligibleSuppliers.includes(sup) && promoEligiblePlatforms.includes(plat)) {
-          const itemRate = sup === 'RAD' ? Math.min(baseDiscountRate, 0.30) : baseDiscountRate;
+          let itemRate = baseDiscountRate;
+          if (sup === 'RAD') {
+            itemRate = Math.min(baseDiscountRate, 0.30);
+          }
           totalDiscountAmount += (safeNum(item.selectedPrice) * safeNum(item.quantity || 1)) * itemRate;
         }
       });
 
-      const taxAmount  = (totalRaw - totalDiscountAmount) * 0.08;
+      const taxAmount = (totalRaw - totalDiscountAmount) * 0.08;
       const finalTotal = totalRaw - totalDiscountAmount + taxAmount;
 
-      // FIX #4: discount display — tránh chia 0
-      const displayDiscountPct = promoSubtotal > 0
-        ? Math.round((totalDiscountAmount / promoSubtotal) * 100)
-        : 0;
+      const displayDiscountPct = promoSubtotal > 0 ? Math.round((totalDiscountAmount / promoSubtotal) * 100) : 0;
 
-      const getDynamicFontSize = (text, baseSize='text-4xl') => {
+      const getDynamicFontSize = (text, baseSize = 'text-4xl') => {
         const len = String(text).length;
         if (len > 24) return 'text-lg';
         if (len > 20) return 'text-xl';
@@ -439,60 +440,39 @@
         return baseSize;
       };
 
-      // ─── FIX: PDF — printAreaRef gắn vào JSX ẩn bên dưới ───
-      const handleExportPDF = async () => {
-        if (cart.length === 0) return;
-        setIsExporting(true);
-        try {
-          const element = printAreaRef.current;
-          element.style.display = 'block';
-          await new Promise(r => setTimeout(r, 400));
-          const canvas = await window.html2canvas(element, { scale:2, useCORS:true, backgroundColor:"#ffffff" });
-          const imgData = canvas.toDataURL('image/png');
-          const pdf = new window.jspdf.jsPDF('p','mm','a4');
-          pdf.addImage(imgData,'PNG',0,0,210,(canvas.height*210)/canvas.width);
-          pdf.save(`GDL_BaoGia_${Date.now()}.pdf`);
-          element.style.display = 'none';
-          showNotify("Đã tải báo giá!");
-        } catch (err) {
-          showNotify("Lỗi xuất PDF: " + err.message, "error");
-        } finally {
-          setIsExporting(false);
-        }
-      };
-
       const renderCard = useCallback((inf) => {
         const isInCart = cart.some(c => String(c.id) === String(inf.id));
-        const name      = safeStr(inf.name)     || `KOL #${inf.id}`;
-        const platform  = safeStr(inf.platform) || 'N/A';
-        const category  = safeStr(inf.category) || '';
-        const bio       = safeStr(inf.bio)       || '';
-        const link      = safeStr(inf.link)      || '#';
-        const imgSrc    = safeStr(inf.image)     || `https://api.dicebear.com/7.x/avataaars/svg?seed=${inf.id}`;
+        const name = safeStr(inf.name) || `KOL #${inf.id}`;
+        const platform = safeStr(inf.platform) || 'N/A';
+        const category = safeStr(inf.category) || '';
+        const bio = safeStr(inf.bio) || '';
+        const link = safeStr(inf.link) || '#';
+        const imgSrc = safeStr(inf.image) || `https://api.dicebear.com/7.x/avataaars/svg?seed=${inf.id}`;
         const pricePost = safeNum(inf.price_post);
         const followers = safeNum(inf.followers);
         return (
           <div key={inf.id} className={`group flex flex-col rounded-2xl sm:rounded-[2.5rem] card-frame transition-all hover:-translate-y-1 overflow-hidden ${theme === 'dark' ? 'bg-slate-900 shadow-2xl' : 'bg-white shadow-md'}`}>
             <div className="aspect-square sm:aspect-video overflow-hidden relative">
               <a href={link} target="_blank" rel="noreferrer" className="block w-full h-full">
-                <img src={imgSrc} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy"
-                  onError={e => { e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${inf.id}`; }} />
+                <img src={imgSrc} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" onError={e => { e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${inf.id}`; }} />
               </a>
               <div className="absolute top-2 left-2 sm:top-4 sm:left-4 flex flex-col gap-1 uppercase font-black text-[6px] sm:text-[8px]">
                 <span className="bg-brand-bold text-white px-1.5 sm:px-2 py-0.5 sm:py-1 rounded shadow-lg">{platform}</span>
               </div>
+              <button onClick={(e) => { e.stopPropagation(); copyToClipboard(link); }} className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-yellow-400 text-slate-900 p-1.5 sm:p-2 rounded-md sm:rounded-lg shadow-lg hover:scale-110 active:opacity-70 transition-all" title="Copy link">
+                <Icon name="external-link" size={12} />
+              </button>
             </div>
-            <div className="p-3 sm:p-5 flex-1 flex flex-col text-left font-black">
+            <div className="p-3 sm:p-5 flex flex-col text-left font-black">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-1 sm:mb-2 gap-1">
-                <a href={link} target="_blank" rel="noreferrer" className="hover:underline decoration-brand-bold">
-                  <h4 className="text-[11px] sm:text-sm leading-tight line-clamp-2 h-7 sm:h-10 overflow-hidden" title={name}>{name}</h4>
-                </a>
+                <a href={link} target="_blank" rel="noreferrer" className="hover:underline decoration-brand-bold"><h4 className="text-[11px] sm:text-sm leading-tight line-clamp-2 h-7 sm:h-10 overflow-hidden font-black" title={name}>{name}</h4></a>
                 {category && <span className="text-[6px] sm:text-[8px] text-brand-bold uppercase bg-brand-bold/10 px-1.5 py-0.5 rounded-full whitespace-nowrap w-fit">{category}</span>}
               </div>
               {bio && <p className="text-[9px] sm:text-[11px] text-slate-500 line-clamp-2 mb-2 sm:mb-4 italic min-h-[26px] sm:min-h-[32px] font-normal tracking-tight leading-snug">"{bio}"</p>}
-              <div className={`mt-auto flex flex-col sm:flex-row items-start sm:items-center sm:justify-between p-2 sm:p-3 rounded-lg sm:rounded-2xl mb-2 sm:mb-4 gap-1.5 sm:gap-0 ${theme === 'dark' ? 'bg-slate-950' : 'bg-slate-50'}`}>
+              
+              <div className={`flex flex-col sm:flex-row items-start sm:items-center sm:justify-between p-2 sm:p-3 rounded-lg sm:rounded-2xl mb-2 sm:mb-4 gap-1.5 sm:gap-0 ${theme === 'dark' ? 'bg-slate-950' : 'bg-slate-50'}`}>
                 <div className="flex flex-col text-left"><span className="text-[7px] sm:text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Booking</span><span className="text-[10px] sm:text-xs text-brand-bold">{pricePost > 0 ? formatVND(pricePost) : 'Liên hệ'}</span></div>
-                <div className="flex flex-col text-left sm:items-end sm:text-right"><span className="text-[7px] sm:text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Followers</span><span className="text-[8px] sm:text-[10px] italic">{followers > 0 ? fmtNum(followers) : 'N/A'}</span></div>
+                <div className="flex flex-col text-left sm:items-end sm:text-right"><span className="text-[7px] sm:text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Followers</span><span className="text-[8px] sm:text-[10px] font-black italic">{followers > 0 ? fmtNum(followers) : 'N/A'}</span></div>
               </div>
               <button onClick={() => addToCart({...inf, name, platform, category, bio, link, image: imgSrc, price_post: pricePost, followers})} className={`w-full py-2 sm:py-3.5 rounded-lg sm:rounded-2xl font-black uppercase text-[7px] sm:text-[9px] tracking-widest transition-all ${isInCart ? 'bg-slate-700 cursor-not-allowed opacity-80 text-white/50' : 'bg-brand-bold text-white hover:opacity-90'}`}>
                 {isInCart ? 'Đã trong giỏ' : 'Thêm giỏ hàng'}
@@ -500,12 +480,12 @@
             </div>
           </div>
         );
-      }, [cart, theme, formatVND, fmtNum, addToCart]);
+      }, [cart, theme, addToCart]);
 
       return (
         <div className={`min-h-screen transition-colors duration-300 pb-safe ${theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-white text-slate-900'}`}>
 
-          {/* ─── FIX #2: PDF Print Area — gắn ref thật vào DOM ─── */}
+          {/* HIDDEN PRINT AREA */}
           <div ref={printAreaRef} className="print-area" style={{ display:'none', backgroundColor:'#fff', padding:'32px', fontFamily:'sans-serif' }}>
             <div style={{ borderBottom:'3px solid #015f01', paddingBottom:16, marginBottom:24 }}>
               <h1 style={{ color:'#015f01', fontSize:28, fontWeight:900, margin:0 }}>GDL JSC — BÁO GIÁ BOOKING</h1>
@@ -540,28 +520,24 @@
             <p style={{ marginTop:32, fontSize:11, color:'#aaa', borderTop:'1px solid #eee', paddingTop:12 }}>GDL JSC Booking Platform • Báo giá chỉ có giá trị tham khảo</p>
           </div>
 
-          {/* ─── HEADER ─── */}
           <header className={`sticky top-0 z-[60] border-b backdrop-blur-md transition-colors ${theme === 'dark' ? 'bg-slate-900/80 border-white/5' : 'bg-white/90 border-slate-200 shadow-sm'}`}>
             <div className="container mx-auto flex h-16 sm:h-20 items-center justify-between px-4 lg:px-8">
               <div onClick={() => setView('home')} className="flex items-center cursor-pointer py-2">
-                {!logoError
-                  ? <img src={theme === 'dark' ? GDL_LOGO_DARK : GDL_LOGO_LIGHT} className="h-10 sm:h-12 w-auto object-contain" alt="GDL JSC Logo" onError={() => setLogoError(true)} />
-                  : <GDLFallbackLogo isDark={theme==='dark'} />
-                }
+                {!logoError ? ( <img src={theme === 'dark' ? GDL_LOGO_DARK : GDL_LOGO_LIGHT} className="h-10 sm:h-12 w-auto object-contain" alt="GDL JSC Logo" onError={() => setLogoError(true)}/> ) : ( <GDLFallbackLogo isDark={theme === 'dark'} /> )}
               </div>
               <div className="flex items-center gap-4 font-black">
-                <nav className="hidden md:flex items-center gap-8 text-[11px] uppercase tracking-widest">
-                  {[['home','Danh sách'],['promotions','Khuyến mãi'],['gbuzz','GBUZZ']].map(([v,label]) => (
-                    <button key={v} onClick={() => setView(v)} className={`hover:text-brand-bold transition-colors ${view===v ? 'text-brand-bold underline underline-offset-8 decoration-2' : ''}`}>{label}</button>
-                  ))}
+                <nav className="hidden md:flex items-center gap-8 text-[11px] uppercase tracking-widest text-left">
+                  <button onClick={() => setView('home')} className={`hover:text-brand-bold transition-colors ${view === 'home' ? 'text-brand-bold underline underline-offset-8 decoration-2' : ''}`}>Danh sách</button>
+                  <button onClick={() => setView('promotions')} className={`hover:text-brand-bold transition-colors ${view === 'promotions' ? 'text-brand-bold underline underline-offset-8 decoration-2' : ''}`}>Khuyến mãi</button>
+                  <button onClick={() => setView('gbuzz')} className={`hover:text-brand-bold transition-colors ${view === 'gbuzz' ? 'text-brand-bold border-b-2 border-brand-bold pb-1' : ''}`}>GBUZZ</button>
                 </nav>
                 <div className="flex items-center gap-2">
-                  <button onClick={toggleTheme} className="p-2.5 rounded-full border border-slate-700 hover:bg-brand-bold/10 transition-colors">
-                    <Icon name={theme==='dark' ? 'sun' : 'moon'} size={18} />
+                  <button onClick={toggleTheme} className="p-2.5 rounded-full border border-slate-700 hover:bg-brand-bold/10 transition-colors"> 
+                    <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={18} />
                   </button>
-                  <button onClick={() => setView('cart')} className="relative p-2.5 rounded-full border border-slate-700 hover:bg-brand-bold/10 transition-colors">
+                  <button onClick={() => setView('cart')} className="relative p-2.5 rounded-full border border-slate-700 hover:bg-brand-bold/10 transition-colors"> 
                     <Icon name="shopping-cart" size={18} />
-                    {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-brand-bold text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold text-white shadow-lg">{cart.length}</span>}
+                    {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-brand-bold text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold text-white shadow-lg">{cart.length}</span>} 
                   </button>
                 </div>
               </div>
@@ -569,204 +545,126 @@
           </header>
 
           <main className="container mx-auto px-2 sm:px-4 py-6 sm:py-8 lg:px-8">
-
-            {/* ─── HOME ─── */}
             {view === 'home' && (
-              <div className="space-y-6">
-                {/* Hero banner */}
+              <div className="space-y-8 sm:space-y-12">
                 <div className="relative rounded-[2rem] sm:rounded-[3rem] bg-gradient-to-br from-brand-bold to-brand-light px-4 py-10 sm:px-6 sm:py-12 text-center text-white overflow-hidden shadow-2xl">
                   <div className="absolute -top-16 -right-24 opacity-30 pointer-events-none transform rotate-[25deg] select-none scale-[1.5]">
-                    <img src={DECOR_LOGO} className="w-[28rem] h-[28rem] object-contain blur-[0.3px] animate-pulse" alt="" loading="lazy" />
+                    <img src={DECOR_LOGO} className="w-[28rem] h-[28rem] object-contain blur-[0.3px] animate-pulse" alt="" loading="lazy"/>
                   </div>
                   <h2 className="text-2xl sm:text-5xl font-black mb-8 sm:mb-10 italic uppercase tracking-tighter relative z-10 text-shadow-strong px-2">HỆ THỐNG BOOKING GDL NETWORK</h2>
                   <div className="grid grid-cols-3 gap-3 sm:gap-6 max-w-5xl mx-auto mb-8 sm:mb-12 relative z-10 font-black">
-                    {[
-                      { label:'SỐ KÊNH',    val: <CountUp end={systemStats.totalKols} /> },
-                      { label:'FOLLOWERS',   val: <CountUp end={systemStats.totalFollowers} formatter={fmtNum} /> },
-                      { label:'NGÀNH NGHỀ', val: <CountUp end={systemStats.totalCats} />, onClick: () => setIsCategoryOpen(true) },
-                    ].map(({ label, val, onClick }) => (
-                      <div key={label} className={`bg-white/10 backdrop-blur-md rounded-2xl sm:rounded-3xl p-3 sm:p-6 border border-white/10 text-center flex flex-col justify-center ${onClick ? 'cursor-pointer hover:bg-white/20 transition-all' : ''}`} onClick={onClick}>
-                        <span className="text-white text-[8px] sm:text-xs uppercase tracking-widest mb-1 sm:mb-3 block opacity-90">{label}</span>
-                        <h4 className="text-xl sm:text-4xl italic text-shadow-strong leading-none">{val}</h4>
-                      </div>
-                    ))}
+                    <div className="bg-white/10 backdrop-blur-md rounded-2xl sm:rounded-3xl p-3 sm:p-6 border border-white/10 text-center flex flex-col justify-center">
+                       <span className="text-white text-[8px] sm:text-xs uppercase tracking-widest mb-1 sm:mb-3 block opacity-90">SỐ KÊNH</span>
+                       <h4 className="text-xl sm:text-4xl italic text-shadow-strong leading-none"><CountUp end={systemStats.totalKols} /></h4>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-md rounded-2xl sm:rounded-3xl p-3 sm:p-6 border border-white/10 text-center flex flex-col justify-center">
+                       <span className="text-white text-[8px] sm:text-xs uppercase tracking-widest mb-1 sm:mb-3 block opacity-90">FOLLOWERS</span>
+                       <h4 className="text-xl sm:text-4xl italic text-shadow-strong leading-none"><CountUp end={systemStats.totalFollowers} formatter={fmtNum} /></h4>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-md rounded-2xl sm:rounded-3xl p-3 sm:p-6 border border-white/10 cursor-pointer group text-center flex flex-col justify-center hover:bg-white/20 transition-all" onClick={() => setIsCategoryOpen(true)}>
+                       <span className="text-white text-[8px] sm:text-xs uppercase tracking-widest mb-1 sm:mb-3 block opacity-90 group-hover:opacity-100 flex items-center justify-center gap-1">NGÀNH NGHỀ <Icon name="chevron-down" size={12} /></span>
+                       <h4 className="text-xl sm:text-4xl italic text-shadow-strong leading-none"><CountUp end={systemStats.totalCats} /></h4>
+                    </div>
                   </div>
                   <div className="flex flex-col sm:flex-row items-center justify-center gap-3 max-w-2xl mx-auto relative z-10 text-left font-black">
-                    <div className="relative flex-1 w-full">
+                    <div className="relative group flex-1 w-full font-black">
                       <div className="absolute left-4 top-3 text-white/60 sm:top-3.5"><Icon name="search" size={20}/></div>
-                      <input type="text" placeholder="Tìm KOL theo tên..." className="w-full pl-12 pr-4 py-3 sm:py-4 rounded-xl sm:rounded-2xl border-none outline-none bg-white/20 backdrop-blur-md focus:ring-4 focus:ring-white/20 transition-all text-white placeholder:text-white/60 shadow-xl text-sm sm:text-base" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-                    </div>
-                    <button onClick={() => setIsFilterModalOpen(true)} className="w-full sm:w-auto p-3 sm:p-4 bg-white text-[#02bf02] rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 shadow-xl hover:bg-emerald-50 transition-all active:scale-95 whitespace-nowrap">
-                      <Icon name="filter" size={20}/> <span className="text-sm sm:text-base">LỌC NÂNG CAO</span>
-                    </button>
+                      <input type="text" placeholder="Tìm KOL theo tên..." className="w-full pl-12 pr-4 py-3 sm:py-4 rounded-xl sm:rounded-2xl border-none outline-none bg-white/20 backdrop-blur-md focus:ring-4 focus:ring-white/20 transition-all text-white placeholder:text-white/60 shadow-xl font-black text-sm sm:text-base" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
+                    <button onClick={() => setIsFilterModalOpen(true)} className="w-full sm:w-auto p-3 sm:p-4 bg-white text-[#02bf02] rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 shadow-xl hover:bg-emerald-50 transition-all active:scale-95 whitespace-nowrap"><Icon name="filter" size={20}/> <span className="text-sm sm:text-base">LỌC NÂNG CAO</span></button>
                   </div>
                 </div>
 
-                {/* Result count */}
                 <div className={`text-[11px] font-black uppercase tracking-widest ${theme==='dark' ? 'text-slate-500' : 'text-slate-400'}`}>
                   Hiển thị {filteredData.length} kênh
                 </div>
 
-                {/* ─── FIX #1: Virtual Grid thay grid thông thường ─── */}
                 {loading ? (
                   <div className="text-center py-20 text-slate-500 font-black uppercase tracking-widest text-sm">Đang tải dữ liệu...</div>
                 ) : (
-                  <VirtualGrid items={filteredData} renderItem={renderCard} theme={theme} />
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-6 pb-24 items-start">
+                    {filteredData.map(inf => renderCard(inf))}
+                  </div>
                 )}
               </div>
             )}
 
-            {/* ─── GBUZZ ─── */}
             {view === 'gbuzz' && (
-              <div className="max-w-6xl mx-auto space-y-4 py-6 sm:py-10 pb-20 text-center">
-                <h2 className="text-4xl sm:text-7xl text-white tracking-tighter uppercase italic leading-tight text-shadow-premium headline-premium px-2">DỊCH VỤ GBUZZ</h2>
-                <p className={`mt-2 font-bold text-sm sm:text-lg italic px-2 ${theme==='dark' ? 'text-slate-400' : 'text-slate-500'}`}>Bùng nổ Thảo luận Cộng đồng cùng GDL JSC.</p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 mt-10 sm:mt-16 text-left">
-                  {GBUZZ_PACKAGES.map(pkg => (
-                    <div key={pkg.id} className={`rounded-[2rem] sm:rounded-[3rem] p-6 sm:p-10 border transition-all hover:-translate-y-2 flex flex-col card-frame pkg-card ${theme==='dark' ? 'bg-slate-900' : 'bg-white shadow-md'}`}>
-                      <div className="min-h-[80px] sm:min-h-[100px] flex flex-col justify-center text-center font-black">
-                        <h3 className="text-2xl sm:text-4xl mb-1 italic uppercase text-brand-bold leading-none">{pkg.name}</h3>
-                        <p className="text-slate-500 text-[10px] sm:text-xs uppercase tracking-[0.2em]">{pkg.positioning}</p>
-                      </div>
-                      <div className={`p-4 sm:p-6 rounded-2xl sm:rounded-3xl mb-6 sm:mb-8 mt-4 sm:mt-6 ${theme==='dark' ? 'bg-slate-950 border border-white/5' : 'bg-slate-100 shadow-inner'} flex flex-col justify-center text-center font-black`}>
-                        <p className="text-[9px] sm:text-[10px] uppercase mb-1 sm:mb-2 tracking-widest">Mục tiêu chính:</p>
-                        <p className={`text-xs sm:text-sm leading-tight ${theme==='dark' ? 'text-white' : 'text-slate-900'}`}>{pkg.goal}</p>
-                      </div>
-                      <ul className="space-y-4 sm:space-y-5 mb-8 sm:mb-10 flex-1 text-left font-medium">
-                        {pkg.items.map((item, i) => (
-                          <li key={i} className="flex gap-3 sm:gap-4 text-xs sm:text-sm leading-relaxed items-start">
-                            <Icon name="check-circle" size={16} className="text-brand-bold shrink-0 mt-0.5"/>
-                            <span className={theme==='dark' ? 'text-slate-300' : 'text-slate-600'}>{item}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      <div className="pt-6 sm:pt-8 border-t border-slate-800 flex flex-col gap-4 sm:gap-6 mt-auto font-black">
-                        <div className="flex flex-col items-center">
-                          <span className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-widest mb-1 italic">Giá trị trọn gói ({pkg.time}):</span>
-                          <span className="text-2xl sm:text-4xl text-brand-bold tracking-tighter">{formatVND(pkg.price)}</span>
+              <div className="max-w-6xl mx-auto space-y-4 py-6 sm:py-10 pb-20 text-center font-black">
+                 <h2 className="text-4xl sm:text-7xl text-white tracking-tighter uppercase italic leading-tight text-shadow-premium text-stroke-brand headline-premium px-2">DỊCH VỤ GBUZZ</h2>
+                 <p className="text-slate-500 dark:text-slate-400 mt-2 font-bold text-sm sm:text-lg font-normal italic px-2">Bùng nổ Thảo luận Cộng đồng cùng GDL JSC.</p>
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 mt-10 sm:mt-16 text-left">
+                    {GBUZZ_PACKAGES.map(pkg => (
+                      <div key={pkg.id} className={`rounded-[2rem] sm:rounded-[3rem] p-6 sm:p-10 border transition-all hover:-translate-y-2 flex flex-col card-frame pkg-card ${theme === 'dark' ? 'bg-slate-900' : 'bg-white shadow-md'}`}>
+                        <div className="min-h-[80px] sm:min-h-[100px] flex flex-col justify-center text-center font-black">
+                           <h3 className="text-2xl sm:text-4xl font-black mb-1 italic uppercase text-brand-bold leading-none">{pkg.name}</h3>
+                           <p className="text-slate-500 font-bold text-[10px] sm:text-xs uppercase tracking-[0.2em] font-black">{pkg.positioning}</p>
                         </div>
-                        <button onClick={() => addToCart(pkg)} className="w-full py-4 sm:py-5 rounded-xl sm:rounded-2xl bg-brand-bold text-white uppercase text-[10px] sm:text-xs shadow-xl hover:opacity-90 transition-all active:scale-95 italic">Thêm vào chiến dịch</button>
+                        <div className={`p-4 sm:p-6 rounded-2xl sm:rounded-3xl mb-6 sm:mb-8 mt-4 sm:mt-6 ${theme === 'dark' ? 'bg-slate-950 border border-white/5' : 'bg-slate-100 shadow-inner'} flex flex-col justify-center text-center font-black`}><p className="text-[9px] sm:text-[10px] uppercase mb-1 sm:mb-2 tracking-widest font-black">Mục tiêu chính:</p><p className={`text-xs sm:text-sm font-bold leading-tight ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{pkg.goal}</p></div>
+                        <ul className="space-y-4 sm:space-y-5 mb-8 sm:mb-10 flex-1 text-left text-slate-500 font-normal">{pkg.items.map((item, i) => (<li key={i} className="flex gap-3 sm:gap-4 text-xs sm:text-sm font-medium leading-relaxed items-start font-black"><Icon name="check-circle" size={16} className="text-brand-bold shrink-0 mt-0.5"/><span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}>{item}</span></li>))}</ul>
+                        <div className="pt-6 sm:pt-8 border-t border-slate-800 flex flex-col gap-4 sm:gap-6 mt-auto font-black"><div className="flex flex-col items-center font-black"><span className="text-[9px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1 italic">Giá trị trọn gói ({pkg.time}):</span><span className="text-2xl sm:text-4xl text-brand-bold tracking-tighter font-black">{formatVND(pkg.price)}</span></div><button onClick={() => addToCart(pkg)} className="w-full py-4 sm:py-5 rounded-xl sm:rounded-2xl bg-brand-bold text-white uppercase text-[10px] sm:text-xs shadow-xl shadow-emerald-500/30 hover:opacity-90 transition-all active:scale-95 italic font-black font-black">Thêm vào chiến dịch</button></div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                 </div>
               </div>
             )}
 
-            {/* ─── PROMOTIONS ─── */}
             {view === 'promotions' && (
               <div className="max-w-5xl mx-auto space-y-8 py-8 sm:py-12 pb-24 px-2 sm:px-4 text-center font-black">
-                <h2 className="text-5xl sm:text-8xl tracking-tighter italic uppercase leading-tight text-shadow-premium headline-premium">MUA NHIỀU <br/> GIẢM ĐẬM</h2>
-                <div className="flex flex-col md:flex-row items-center md:items-end justify-center gap-4 h-auto md:h-[550px] mb-8 sm:mb-12 mt-10 sm:mt-0 text-left">
-                  {[
-                    { r:"2 - 5 bài",   d:"10%", h:"h-[120px] md:h-[40%]", c:"bg-brand-bold",  tc:"text-white" },
-                    { r:"6 - 10 bài",  d:"15%", h:"h-[140px] md:h-[55%]", c:"bg-[#014a01]",   tc:"text-white" },
-                    { r:"11 - 20 bài", d:"20%", h:"h-[160px] md:h-[70%]", c:"bg-[#299b29]",   tc:"text-white" },
-                    { r:"Trên 20 bài", d:"25%", h:"h-[180px] md:h-[85%]", c:"bg-brand-light",  tc:"text-white", hot:true },
-                  ].map((p,i) => (
-                    <div key={i} className="flex-1 flex flex-col justify-end w-full md:w-auto md:h-full">
-                      {p.hot && <div className="flex justify-center mb-2"><span className="bg-yellow-400 text-slate-900 text-[9px] sm:text-[10px] font-black px-3 py-1 rounded-full shadow-lg border-2 border-slate-950 uppercase tracking-widest animate-bounce">BÙNG NỔ 🔥</span></div>}
-                      <div className={`step-up ${p.c} ${p.h} rounded-[2rem] md:rounded-t-[3rem] md:rounded-b-none p-4 sm:p-6 flex flex-col items-center justify-center text-center shadow-2xl card-frame relative overflow-hidden`}>
-                        <span className={`text-[9px] sm:text-[12px] uppercase tracking-[0.2em] mb-1 sm:mb-4 opacity-70 ${p.tc}`}>BOOKING TỪ</span>
-                        <span className={`text-[11px] sm:text-[18px] uppercase tracking-widest mb-2 sm:mb-6 leading-none ${p.tc}`}>{p.r}</span>
-                        <h4 className={`text-4xl sm:text-7xl tracking-tighter italic ${p.tc}`}>{p.d}</h4>
-                      </div>
-                    </div>
-                  ))}
+                <h2 className="text-5xl sm:text-8xl text-white tracking-tighter italic uppercase leading-tight text-shadow-premium text-stroke-brand headline-premium">
+                    MUA NHIỀU <br /> GIẢM ĐẬM
+                </h2>
+                <div className="flex flex-col md:flex-row items-center md:items-end justify-center gap-4 h-auto md:h-[550px] mb-8 sm:mb-12 mt-10 sm:mt-0 text-left font-black">
+                   {[
+                     { r: "2 - 5 bài", d: "10%", h: "h-[120px] md:h-[40%]", c: "bg-brand-bold", tc: "text-white" },
+                     { r: "6 - 10 bài", d: "15%", h: "h-[140px] md:h-[55%]", c: "bg-[#014a01]", tc: "text-white" },
+                     { r: "11 - 20 bài", d: "20%", h: "h-[160px] md:h-[70%]", c: "bg-[#299b29]", tc: "text-white" },
+                     { r: "Trên 20 bài", d: "25%", h: "h-[180px] md:h-[85%]", c: "bg-brand-light", tc: "text-white", hot: true }
+                   ].map((p, i) => (
+                     <div key={i} className="flex-1 flex flex-col justify-end w-full md:w-auto md:h-full font-black">
+                        {p.hot && <div className="flex justify-center mb-2 text-center font-black"><span className="bg-yellow-400 text-slate-900 text-[9px] sm:text-[10px] font-black px-3 py-1 rounded-full shadow-lg border-2 border-slate-950 uppercase tracking-widest animate-bounce font-black">BÙNG NỔ 🔥</span></div>}
+                        <div className={`step-up ${p.c} ${p.h} rounded-[2rem] md:rounded-t-[3rem] md:rounded-b-none p-4 sm:p-6 flex flex-col items-center justify-center border text-center shadow-2xl card-frame relative overflow-hidden font-black font-black`}><div className="absolute top-0 left-0 w-full h-1 bg-white/20"></div><span className={`text-[9px] sm:text-[12px] uppercase tracking-[0.2em] mb-1 sm:mb-4 opacity-70 ${p.tc} font-black`}>BOOKING TỪ</span><span className={`text-[11px] sm:text-[18px] uppercase tracking-widest mb-2 sm:mb-6 leading-none ${p.tc} font-black`}>{p.r}</span><h4 className={`text-4xl sm:text-7xl tracking-tighter italic ${p.tc} font-black`}>{p.d}</h4></div>
+                     </div>
+                   ))}
                 </div>
-                <div className={`text-[10px] sm:text-sm font-bold italic uppercase tracking-wider leading-relaxed ${theme==='dark' ? 'text-slate-400' : 'text-slate-500'} bg-slate-900/30 p-4 rounded-2xl`}>
-                  Áp dụng tự động cho Platform: <span className="text-brand-bold">Facebook Group, Facebook Page</span><br/>
-                  thuộc Supplier: <span className="text-brand-bold">GDL, YAN, DAN, RAD</span>
+                <div className={`text-[10px] sm:text-sm font-bold italic uppercase tracking-wider leading-relaxed ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'} bg-slate-900/30 p-4 rounded-2xl`}>
+                   Áp dụng tự động cho Platform: <span className="text-brand-bold">Facebook Group, Facebook Page</span><br/>thuộc Supplier: <span className="text-brand-bold">GDL, YAN, DAN, RAD</span>
                 </div>
               </div>
             )}
 
-            {/* ─── CART ─── */}
             {view === 'cart' && (
               <div className="max-w-6xl mx-auto pb-20 px-2 text-center font-black">
-                <h2 className="text-2xl sm:text-3xl mb-8 flex items-center justify-center gap-3 text-brand-bold uppercase tracking-tighter">
-                  <Icon name="shopping-cart" size={28}/> Giỏ hàng booking
-                </h2>
+                <h2 className="text-2xl sm:text-3xl mb-8 flex items-center justify-center gap-3 text-brand-bold uppercase tracking-tighter font-black"><Icon name="shopping-cart" size={28}/> Giỏ hàng booking</h2>
                 {cart.length === 0 ? (
-                  <div className={`text-center py-20 rounded-[2.5rem] card-frame ${theme==='dark' ? 'bg-slate-900/30 text-slate-600 border-white/5' : 'bg-white border-slate-200 text-slate-400'} uppercase tracking-[0.2em]`}>Giỏ hàng trống</div>
+                  <div className={`text-center py-20 rounded-[2.5rem] card-frame ${theme === 'dark' ? 'bg-slate-900/30 text-slate-600 border-white/5' : 'bg-white border-slate-200 text-slate-400'} uppercase font-black tracking-[0.2em]`}>Giỏ hàng trống</div>
                 ) : (
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 font-black">
                     <div className="lg:col-span-2 space-y-4 sm:space-y-6 text-left">
                       {cart.map(item => (
-                        <div key={item.id} className={`flex flex-col sm:flex-row items-center gap-4 sm:gap-6 p-4 sm:p-6 rounded-[2rem] sm:rounded-[2.5rem] border card-frame ${theme==='dark' ? 'bg-slate-900' : 'bg-white shadow-md'}`}>
+                        <div key={item.id} className={`flex flex-col sm:flex-row items-center gap-4 sm:gap-6 p-4 sm:p-6 rounded-[2rem] sm:rounded-[2.5rem] border card-frame ${theme === 'dark' ? 'bg-slate-900' : 'bg-white shadow-md'}`}>
                           {item.id === 'gbuzz_free' ? (
-                            <div className="flex-1 text-center sm:text-left cursor-pointer group w-full" onClick={() => setView('gbuzz')}>
-                              <span className="bg-brand-bold text-white text-[9px] px-3 py-1 rounded-full uppercase mb-2 inline-block shadow-lg">Quà tặng đặc biệt 🎁</span>
-                              <h4 className="text-xl sm:text-2xl text-brand-bold leading-tight italic uppercase group-hover:underline">GBUZZ TRIAL</h4>
-                              <p className="text-slate-500 mt-1 sm:mt-2 text-xs sm:text-sm italic font-medium">{item.desc}</p>
-                            </div>
+                              <div className="flex-1 text-center sm:text-left cursor-pointer group w-full font-black" onClick={() => setView('gbuzz')}><span className="bg-brand-bold text-white text-[9px] px-3 py-1 rounded-full uppercase mb-2 inline-block shadow-lg font-black">Quà tặng đặc biệt 🎁</span><h4 className="font-black text-xl sm:text-2xl text-brand-bold leading-tight italic uppercase group-hover:underline text-left font-black">GBUZZ TRIAL</h4><p className="text-slate-500 font-bold mt-1 sm:mt-2 text-xs sm:text-sm italic font-normal">{item.desc}</p><p className="text-[8px] font-black text-brand-bold uppercase tracking-widest mt-3 flex items-center justify-center sm:justify-start gap-1 opacity-60 group-hover:opacity-100 transition-opacity font-black"><Icon name="external-link" size={10} /> Nhấn để xem chi tiết</p></div>
                           ) : (
-                            <>
-                              <div className="flex items-center gap-4 shrink-0">
-                                {item.isGbuzz
-                                  ? <div className="h-14 w-14 sm:h-16 sm:w-16 flex items-center justify-center bg-brand-bold rounded-2xl text-white shrink-0 shadow-lg italic text-lg sm:text-xl cursor-pointer" onClick={() => setView('gbuzz')}>GB</div>
-                                  : <img src={item.image} className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl object-cover shadow-lg shrink-0" loading="lazy" />
-                                }
-                              </div>
-                              <div className="flex-1 text-center sm:text-left w-full">
-                                <h4 className={`font-black text-base sm:text-xl leading-tight ${theme==='dark' ? 'text-white' : 'text-slate-900'}`}>{item.name}</h4>
-                                <div className="flex flex-wrap justify-center sm:justify-start gap-2 mt-2">
-                                  <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[9px] font-bold uppercase">{item.platform||'System'}</span>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-4 sm:gap-6 w-full sm:w-auto justify-between sm:justify-end border-t border-slate-800/30 sm:border-none pt-4 sm:pt-0 mt-2 sm:mt-0">
-                                {!item.isGbuzz && (
-                                  <div className="flex flex-col gap-1 text-left">
-                                    <label className="text-[8px] sm:text-[9px] text-slate-500 uppercase tracking-tighter">Số lượng</label>
-                                    <input type="number" min="1" className={`w-14 sm:w-16 p-1.5 sm:p-2 rounded-lg sm:rounded-xl text-center font-bold border-none outline-none ${theme==='dark' ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-950'}`} value={item.quantity} onChange={e => updateCartItem(item.id, { quantity: parseInt(e.target.value)||1 })} />
-                                  </div>
-                                )}
-                                <div className="text-right min-w-[100px] sm:min-w-[140px]">
-                                  <span className="text-lg sm:text-2xl text-brand-bold tracking-tighter">{formatVND(item.selectedPrice*(item.quantity||1))}</span>
-                                  {item.id !== 'gbuzz_free' && (
-                                    <button onClick={() => removeFromCart(item.id)} className="block ml-auto mt-1 sm:mt-2 text-rose-500 hover:text-rose-400 transition-colors">
-                                      <Icon name="trash-2" size={18}/>
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            </>
+                            <><div className="flex items-center gap-4 shrink-0 font-black">{item.isGbuzz ? <div className="h-14 w-14 sm:h-16 sm:w-16 flex items-center justify-center bg-brand-bold rounded-2xl text-white shrink-0 shadow-lg italic text-lg sm:text-xl cursor-pointer font-black" onClick={() => setView('gbuzz')}>GB</div> : <img src={item.image} className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl object-cover shadow-lg shrink-0" loading="lazy" />}</div><div className="flex-1 text-center sm:text-left cursor-pointer w-full font-black" onClick={() => item.isGbuzz && setView('gbuzz')}><h4 className={`font-black text-base sm:text-xl leading-tight ${theme === 'dark' ? 'text-white' : 'text-slate-900'} ${item.isGbuzz ? 'hover:underline font-black' : ''}`}>{item.name}</h4><div className="flex flex-wrap justify-center sm:justify-start gap-2 mt-2 font-black"><span className="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[9px] font-bold uppercase">{item.platform || 'System'}</span></div></div><div className="flex items-center gap-4 sm:gap-6 w-full sm:w-auto justify-between sm:justify-end border-t border-slate-800/30 sm:border-none pt-4 sm:pt-0 mt-2 sm:mt-0 font-black">{!item.isGbuzz && (<div className="flex flex-col gap-1 text-left font-black"><label className="text-[8px] sm:text-[9px] font-black text-slate-500 uppercase tracking-tighter">Số lượng</label><input type="number" min="1" className={`w-14 sm:w-16 p-1.5 sm:p-2 rounded-lg sm:rounded-xl text-center font-bold border-none outline-none ${theme === 'dark' ? 'bg-slate-950 text-white border border-white/5' : 'bg-slate-100 text-slate-950 shadow-inner font-black'}`} value={item.quantity} onChange={(e) => updateCartItem(item.id, { quantity: parseInt(e.target.value) || 1 })} /></div>)}<div className="text-right min-w-[100px] sm:min-w-[140px] font-black"><span className="text-lg sm:text-2xl text-brand-bold tracking-tighter font-black">{formatVND(item.selectedPrice * item.quantity)}</span>{item.id !== 'gbuzz_free' && <button onClick={() => removeFromCart(item.id)} className="block ml-auto mt-1 sm:mt-2 text-rose-500 hover:text-rose-400 transition-colors font-black"><Icon name="trash-2" size={18} /></button>}</div></div></>
                           )}
                         </div>
                       ))}
                     </div>
-
-                    {/* Summary */}
-                    <div className={`p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3.5rem] shadow-2xl h-fit card-frame ${theme==='dark' ? 'bg-slate-900' : 'bg-white'}`}>
-                      <h3 className="text-xl sm:text-2xl mb-6 sm:mb-8 italic text-brand-bold flex items-center gap-3 uppercase tracking-tighter text-left">
-                        <Icon name="file-text" size={20}/> Báo giá sơ bộ
-                      </h3>
-                      <div className="space-y-4 sm:space-y-6 text-xs sm:text-sm font-bold text-slate-500 text-left">
-                        <div className="flex justify-between font-medium">
-                          <span>Giá trị gốc</span>
-                          <span className={theme==='dark' ? 'text-white' : 'text-slate-950'}>{formatVND(totalRaw)}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-brand-bold">
-                          <div className="flex flex-col">
-                            <span className="italic">Chiết khấu ({displayDiscountPct}%)</span>
-                            <span className="text-[8px] sm:text-[9px] font-normal text-slate-400 italic">Áp dụng: {promoTotalQuantity} bài hợp lệ</span>
+                    <div className={`p-6 sm:p-8 rounded-[2.5rem] sm:rounded-[3.5rem] shadow-2xl h-fit card-frame ${theme === 'dark' ? 'bg-slate-900' : 'bg-white'}`}>
+                      <h3 className="text-xl sm:text-2xl mb-6 sm:mb-8 italic text-brand-bold flex items-center gap-3 uppercase tracking-tighter text-left font-black"><Icon name="file-text" size={20}/> Báo giá sơ bộ</h3>
+                      <div className="space-y-4 sm:space-y-6 text-xs sm:text-sm font-bold text-slate-500 text-left font-black">
+                        <div className="flex justify-between font-medium text-left font-black"><span>Giá trị gốc</span><span className={theme === 'dark' ? 'text-white' : 'text-slate-950'}>{formatVND(totalRaw)}</span></div>
+                        <div className="flex justify-between items-center text-brand-bold text-left text-emerald-600 font-black">
+                          <div className="flex flex-col text-left font-black">
+                             <span className="italic font-black">Chiết khấu ({displayDiscountPct}%)</span>
+                             <span className="text-[8px] sm:text-[9px] font-normal text-slate-400 italic text-left">Áp dụng: {promoTotalQuantity} bài hợp lệ</span>
                           </div>
-                          <span className="text-lg sm:text-xl">-{formatVND(totalDiscountAmount)}</span>
+                          <span className="text-lg sm:text-xl font-black text-right font-black">-{formatVND(totalDiscountAmount)}</span>
                         </div>
-                        <div className="flex justify-between font-medium">
-                          <span>VAT (8%)</span>
-                          <span className={theme==='dark' ? 'text-white' : 'text-slate-950'}>{formatVND(taxAmount)}</span>
-                        </div>
-                        <div className={`pt-4 sm:pt-6 border-t-2 ${theme==='dark' ? 'border-slate-800' : 'border-slate-100'}`}>
-                          <div className="flex flex-col items-end gap-1 sm:gap-2 text-right">
-                            <span className="text-[9px] sm:text-[10px] uppercase text-slate-400 tracking-[0.2em]">Tổng cộng thanh toán</span>
-                            <span className={`text-brand-bold tracking-tighter leading-none whitespace-nowrap overflow-hidden ${getDynamicFontSize(formatVND(finalTotal))}`}>{formatVND(finalTotal)}</span>
-                          </div>
-                        </div>
+                        <div className="flex justify-between font-medium text-left font-black"><span>VAT (8%)</span><span className={theme === 'dark' ? 'text-white' : 'text-slate-950'}>{formatVND(taxAmount)}</span></div>
+                        <div className={`pt-4 sm:pt-6 border-t-2 ${theme === 'dark' ? 'border-slate-800' : 'border-slate-100'} font-black`}><div className="flex flex-col items-end gap-1 sm:gap-2 text-right font-black"><span className="text-[9px] sm:text-[10px] uppercase font-black text-slate-400 tracking-[0.2em]">Tổng cộng thanh toán</span><span className={`font-black text-brand-bold tracking-tighter leading-none whitespace-nowrap overflow-hidden transition-all font-black font-black ${getDynamicFontSize(formatVND(finalTotal))}`}>{formatVND(finalTotal)}</span></div></div>
                       </div>
-                      <button onClick={handleExportPDF} disabled={isExporting} className="w-full mt-8 sm:mt-10 py-4 sm:py-5 rounded-xl sm:rounded-2xl bg-brand-bold text-white text-sm sm:text-base shadow-xl hover:opacity-90 transition-all uppercase tracking-widest italic flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
-                        <Icon name="download" size={18}/> {isExporting ? 'Đang xuất...' : 'Xuất Báo Giá PDF'}
-                      </button>
+                      <button onClick={handleExportPDF} disabled={isExporting} className="w-full mt-8 sm:mt-10 py-4 sm:py-5 rounded-xl sm:rounded-2xl bg-brand-bold font-black text-white text-sm sm:text-base shadow-xl hover:opacity-90 transition-all uppercase tracking-widest italic flex items-center justify-center gap-2 font-black disabled:opacity-60 disabled:cursor-not-allowed"><Icon name="download" size={18}/> {isExporting ? 'Đang xuất...' : 'Xuất Báo Giá PDF'}</button>
                     </div>
                   </div>
                 )}
@@ -774,103 +672,51 @@
             )}
           </main>
 
-          {/* ─── MOBILE BOTTOM NAV ─── */}
-          <div className="md:hidden fixed bottom-0 left-0 w-full z-[80] bg-slate-950/90 backdrop-blur-xl border-t border-slate-800 flex justify-around items-center py-3 px-2" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
-            {[
-              { v:'home',       icon:'search',        label:'KOLs' },
-              { v:'promotions', icon:'zap',            label:'Sale', dot:true },
-              { v:'gbuzz',      icon:'layers',         label:'GBuzz' },
-              { v:'cart',       icon:'shopping-cart',  label:'Giỏ', badge: cart.length > 0 ? cart.length : null },
-            ].map(({ v, icon, label, dot, badge }) => (
-              <button key={v} onClick={() => setView(v)} className={`flex flex-col items-center gap-1 p-2 ${view===v ? 'text-brand-bold' : 'text-slate-500'}`}>
-                <div className="relative">
-                  <Icon name={icon} size={20}/>
-                  {dot && <span className="absolute -top-1 -right-1 flex h-2 w-2 rounded-full bg-yellow-500 animate-ping"></span>}
-                  {badge && <span className="absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[8px] font-black text-white">{badge}</span>}
-                </div>
-                <span className="text-[8px] font-black uppercase tracking-widest">{label}</span>
+          {/* MOBILE BOTTOM NAVIGATION BAR */}
+          <div className="md:hidden fixed bottom-0 left-0 w-full z-[80] bg-slate-950/90 backdrop-blur-xl border-t border-slate-800 flex justify-around items-center py-3 px-2 pb-safe">
+              <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 p-2 ${view === 'home' ? 'text-brand-bold' : 'text-slate-500'}`}>
+                 <Icon name="search" size={20}/>
+                 <span className="text-[8px] font-black uppercase tracking-widest">KOLs</span>
               </button>
-            ))}
+              <button onClick={() => setView('promotions')} className={`flex flex-col items-center gap-1 p-2 ${view === 'promotions' ? 'text-brand-bold' : 'text-slate-500'}`}>
+                 <div className="relative">
+                   <Icon name="zap" size={20}/>
+                   <span className="absolute -top-1 -right-1 flex h-2 w-2 items-center justify-center rounded-full bg-yellow-500 animate-ping"></span>
+                 </div>
+                 <span className="text-[8px] font-black uppercase tracking-widest">Sale</span>
+              </button>
+              <button onClick={() => setView('gbuzz')} className={`flex flex-col items-center gap-1 p-2 ${view === 'gbuzz' ? 'text-brand-bold' : 'text-slate-500'}`}>
+                 <Icon name="layers" size={20}/>
+                 <span className="text-[8px] font-black uppercase tracking-widest">GBuzz</span>
+              </button>
+              <button onClick={() => setView('cart')} className={`flex flex-col items-center gap-1 p-2 ${view === 'cart' ? 'text-brand-bold' : 'text-slate-500'}`}>
+                 <div className="relative">
+                   <Icon name="shopping-cart" size={20}/>
+                   {cart.length > 0 && <span className="absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[8px] font-black text-white">{cart.length}</span>}
+                 </div>
+                 <span className="text-[8px] font-black uppercase tracking-widest">Giỏ</span>
+              </button>
           </div>
 
-          <footer className="mt-10 mb-24 py-8 border-t border-slate-800 text-center opacity-30 text-[10px] uppercase font-black tracking-widest">GDL JSC Booking Platform</footer>
-
-          {/* ─── CATEGORY MODAL ─── */}
           {isCategoryOpen && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-10 bg-slate-950/80 backdrop-blur-xl">
-              <div className={`w-full max-w-4xl max-h-[80vh] overflow-hidden flex flex-col rounded-[2rem] sm:rounded-[3rem] border shadow-2xl ${theme==='dark' ? 'bg-slate-900/90 border-white/20' : 'bg-white/90 border-slate-200'}`} ref={categoryRef}>
-                <div className="p-6 sm:p-10 border-b border-white/10 flex items-center justify-between">
-                  <div className="flex items-center gap-3 sm:gap-4 text-brand-bold italic uppercase font-black text-xl sm:text-3xl tracking-tighter">
-                    <Icon name="layers" size={24}/><h3>Chọn Ngành Nghề</h3>
-                  </div>
-                  <button onClick={() => setIsCategoryOpen(false)} className={`p-2 sm:p-3 rounded-full transition-colors ${theme==='dark' ? 'hover:bg-slate-800 text-white' : 'hover:bg-slate-100 text-slate-900'}`}><Icon name="x" size={24}/></button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4 sm:p-10 scrollbar-hide">
-                  <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                    <button className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl text-left transition-all border-2 ${!filters.category ? 'bg-brand-bold border-brand-bold text-white' : 'bg-white/5 border-transparent hover:border-brand-bold/50'}`} onClick={() => { setFilters({...filters, category:''}); setIsCategoryOpen(false); }}>
-                      <span className="text-[9px] sm:text-xs uppercase tracking-widest mb-1 block opacity-60">Hệ thống</span>
-                      <span className="text-sm sm:text-xl uppercase italic font-black">TẤT CẢ NGÀNH</span>
-                    </button>
-                    {dynamicCategories.map(cat => (
-                      <button key={cat} className={`p-4 sm:p-6 rounded-xl sm:rounded-2xl text-left transition-all border-2 ${filters.category===cat ? 'bg-brand-bold border-brand-bold text-white' : 'bg-white/5 border-transparent hover:border-brand-bold/50'}`} onClick={() => { setFilters({...filters, category:cat}); setIsCategoryOpen(false); }}>
-                        <span className="text-[9px] sm:text-xs uppercase tracking-widest mb-1 block opacity-60">Danh mục</span>
-                        <span className="text-sm sm:text-xl uppercase italic font-black">{cat}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-10 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-300">
+              <div className={`w-full max-w-4xl max-h-[80vh] overflow-hidden flex flex-col rounded-[2rem] sm:rounded-[3rem] border shadow-2xl animate-in zoom-in-95 duration-300 ${theme === 'dark' ? 'bg-slate-900/90 border-white/20' : 'bg-white/90 border-slate-200 shadow-emerald-950/10'}`} ref={categoryRef}><div className="p-6 sm:p-10 border-b border-white/10 flex items-center justify-between font-black"><div className="flex items-center gap-3 sm:gap-4 text-brand-bold italic uppercase font-black text-xl sm:text-3xl tracking-tighter text-left font-black font-black"><Icon name="layers" size={24} /><h3>Chọn Ngành Nghề</h3></div><button onClick={() => setIsCategoryOpen(false)} className={`p-2 sm:p-3 rounded-full transition-colors ${theme === 'dark' ? 'hover:bg-slate-800 text-white' : 'hover:bg-slate-100 text-slate-900'}`}><Icon name="x" size={24} /></button></div><div className="flex-1 overflow-y-auto p-4 sm:p-10 scrollbar-hide text-left text-left font-black font-black"><div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 text-left font-black font-black"><button className={`group p-4 sm:p-6 rounded-xl sm:rounded-2xl text-left transition-all border-2 ${!filters.category ? 'bg-brand-bold border-brand-bold shadow-lg shadow-brand-bold/30 text-white font-black font-black' : 'bg-white/5 border-transparent hover:border-brand-bold/50 font-black font-black'} font-black`} onClick={() => { setFilters({...filters, category: ''}); setIsCategoryOpen(false); }}><span className="text-[9px] sm:text-xs uppercase tracking-widest mb-1 block opacity-60 font-black">Hệ thống</span><span className={`text-sm sm:text-xl uppercase italic font-black font-black`}>TẤT CẢ NGÀNH</span></button>{dynamicCategories.map(cat => (<button key={cat} className={`group p-4 sm:p-6 rounded-xl sm:rounded-2xl text-left transition-all border-2 ${filters.category === cat ? 'bg-brand-bold border-brand-bold shadow-lg shadow-brand-bold/30 text-white font-black font-black' : 'bg-white/5 border-transparent hover:border-brand-bold/50 font-black font-black'} font-black font-black`} onClick={() => { setFilters({...filters, category: cat}); setIsCategoryOpen(false); }}><span className="text-[9px] sm:text-xs uppercase tracking-widest mb-1 block opacity-60 font-black font-black">Danh mục</span><span className={`text-sm sm:text-xl uppercase italic font-black font-black`}>{cat}</span></button>))}</div></div></div>
             </div>
           )}
 
-          {/* ─── FILTER MODAL ─── */}
           {isFilterModalOpen && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl">
-              <div className={`w-full max-w-xl rounded-[2.5rem] sm:rounded-[3.5rem] border p-6 sm:p-10 shadow-2xl card-frame ${theme==='dark' ? 'bg-slate-900 border-white/10 text-white' : 'bg-white border-slate-100 text-slate-900'}`}>
-                <div className="flex items-center justify-between mb-8 sm:mb-10">
-                  <h3 className="text-[#02bf02] font-black italic uppercase text-4xl sm:text-5xl tracking-tighter">Bộ Lọc Nâng Cao</h3>
-                  <button onClick={() => setIsFilterModalOpen(false)} className={`p-2 sm:p-3 rounded-full transition-colors ${theme==='dark' ? 'hover:bg-slate-800 text-white' : 'hover:bg-slate-100 text-slate-900'}`}><Icon name="x" size={24}/></button>
-                </div>
-                <div className="space-y-6 sm:space-y-8 text-left font-black">
-                  <div className="space-y-2">
-                    <label className="text-[10px] sm:text-[11px] uppercase text-slate-500 px-1 tracking-widest">Nền tảng</label>
-                    <select className={`w-full p-3 sm:p-4 rounded-xl sm:rounded-2xl border-none outline-none text-xs sm:text-sm ${theme==='dark' ? 'bg-slate-950 text-white' : 'bg-white border border-slate-200 text-slate-900'}`} value={filters.platform} onChange={e => setFilters({...filters, platform:e.target.value})}>
-                      <option value="">Tất cả</option>
-                      {[...new Set(influencers.map(i => safeStr(i.platform)).filter(Boolean))].map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                  </div>
-                  <div className="space-y-3 sm:space-y-4 px-1">
-                    <div className="flex justify-between items-center mb-1">
-                      <label className="text-[9px] sm:text-[10px] uppercase text-slate-500 tracking-widest">Ngân sách tối đa</label>
-                      <span className="text-sm sm:text-base text-brand-bold italic">{filters.maxPrice === 50000000 ? "Trên 50.000.000đ" : formatVND(filters.maxPrice)}</span>
-                    </div>
-                    <input type="range" min="1000000" max="50000000" step="1000000" className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-brand-bold" value={filters.maxPrice} onChange={e => setFilters({...filters, maxPrice:parseInt(e.target.value)})} />
-                  </div>
-                  <div className="space-y-3 sm:space-y-4 px-1">
-                    <div className="flex justify-between items-center mb-1">
-                      <label className="text-[9px] sm:text-[10px] uppercase text-slate-500 tracking-widest">Followers tối thiểu</label>
-                      <span className="text-sm sm:text-base text-brand-bold italic">{filters.minFollowers === 10000000 ? "Trên 10M+" : fmtNum(filters.minFollowers)}</span>
-                    </div>
-                    <input type="range" min="0" max="10000000" step="500000" className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-brand-bold" value={filters.minFollowers} onChange={e => setFilters({...filters, minFollowers:parseInt(e.target.value)})} />
-                  </div>
-                </div>
-                <button onClick={() => setIsFilterModalOpen(false)} className="w-full py-4 sm:py-5 rounded-xl sm:rounded-2xl bg-brand-bold text-white mt-8 sm:mt-12 shadow-xl hover:opacity-90 transition-all uppercase tracking-widest text-xs sm:text-sm italic flex items-center justify-center h-14">Xác nhận lọc</button>
-              </div>
-            </div>
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl animate-in fade-in duration-300 font-black"><div className={`w-full max-w-xl rounded-[2.5rem] sm:rounded-[3.5rem] border p-6 sm:p-10 shadow-2xl card-frame ${theme === 'dark' ? 'bg-slate-900 border-white/10 text-white' : 'bg-white border-slate-100 text-slate-900 shadow-slate-200'} font-black`}><div className="flex items-center justify-between mb-8 sm:mb-10 italic uppercase font-black text-[#02bf02] text-4xl sm:text-5xl tracking-tighter text-shadow-strong text-stroke-brand text-left font-black font-black font-black font-black font-black"><h3 className="text-left dark:text-white font-black font-black font-black font-black font-black">Bộ Lọc Nâng Cao</h3><button onClick={() => setIsFilterModalOpen(false)} className={`p-2 sm:p-3 rounded-full transition-colors ${theme === 'dark' ? 'hover:bg-slate-800 text-white' : 'hover:bg-slate-100 text-slate-900'} font-black font-black font-black`}><Icon name="x" size={24} /></button></div><div className="space-y-6 sm:space-y-8 text-left font-black font-black font-black font-black"><div className="space-y-2 text-left text-left font-black font-black font-black font-black"><label className="text-[10px] sm:text-[11px] font-bold uppercase text-slate-500 px-1 text-left block tracking-widest font-black font-black font-black font-black">Nền tảng</label><select className={`w-full p-3 sm:p-4 rounded-xl sm:rounded-2xl border-none font-bold outline-none text-xs sm:text-sm ${theme === 'dark' ? 'bg-slate-950 text-white border border-white/5' : 'bg-white border border-slate-200 shadow-inner text-slate-900'} font-black font-black font-black`} value={filters.platform} onChange={e => setFilters({...filters, platform: e.target.value})}><option value="">Tất cả</option>{[...new Set(influencers.map(i => safeStr(i.platform)).filter(Boolean))].map(p => <option key={p} value={p}>{p}</option>)}</select></div><div className="space-y-3 sm:space-y-4 px-1 font-black font-black font-black font-black font-black font-black"><div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center mb-1 text-left font-black font-black font-black font-black font-black font-black font-black font-black"><label className="text-[9px] sm:text-[10px] uppercase text-slate-500 tracking-widest block font-black font-black">Ngân sách tối đa</label><span className="text-sm sm:text-base text-brand-bold underline italic text-left sm:text-right font-black font-black font-black font-black font-black">{filters.maxPrice === 50000000 ? "Trên 50.000.000đ" : formatVND(filters.maxPrice)}</span></div><input type="range" min="1000000" max="50000000" step="1000000" className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-brand-bold" value={filters.maxPrice} onChange={(e) => setFilters({...filters, maxPrice: parseInt(e.target.value)})} /></div><div className="space-y-3 sm:space-y-4 px-1 font-black font-black font-black font-black font-black font-black font-black"><div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center mb-1 text-left font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black"><label className="text-[9px] sm:text-[10px] uppercase text-slate-500 tracking-widest block font-black font-black font-black">Followers tối thiểu</label><span className="text-sm sm:text-base text-brand-bold underline italic text-left sm:text-right font-black font-black font-black font-black font-black">{filters.minFollowers === 10000000 ? "Trên 10M+" : fmtNum(filters.minFollowers)}</span></div><input type="range" min="0" max="10000000" step="500000" className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-brand-bold" value={filters.minFollowers} onChange={(e) => setFilters({...filters, minFollowers: parseInt(e.target.value)})} /></div></div><button onClick={() => setIsFilterModalOpen(false)} className="w-full py-4 sm:py-5 rounded-xl sm:rounded-2xl bg-brand-bold font-black text-white mt-8 sm:mt-12 shadow-xl hover:opacity-90 transition-all uppercase tracking-widest text-xs sm:text-sm italic text-center block flex justify-center items-center h-14 font-black font-black font-black font-black">Xác nhận lọc</button></div></div>
           )}
 
-          {/* ─── TOAST ─── */}
           {toast && (
-            <div className={`fixed bottom-20 md:bottom-10 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-3 sm:gap-4 px-6 sm:px-8 py-4 sm:py-5 rounded-2xl sm:rounded-3xl shadow-2xl border backdrop-blur-xl w-[90%] sm:w-auto ${theme==='dark' ? 'bg-slate-900 border-white/20 text-white' : 'bg-white border-brand-bold/20 text-slate-900'}`}>
-              <div className={toast.type==='error' ? 'text-rose-500' : 'text-brand-bold'}><Icon name={toast.type==='error' ? 'info' : 'check-circle'} size={24}/></div>
-              <span className="font-black tracking-tight text-xs sm:text-sm uppercase italic">{toast.message}</span>
-            </div>
+            <div className={`fixed bottom-20 md:bottom-10 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-3 sm:gap-4 px-6 sm:px-8 py-4 sm:py-5 rounded-2xl sm:rounded-3xl shadow-2xl border backdrop-blur-xl animate-in slide-in-from-bottom-10 duration-500 ${theme === 'dark' ? 'bg-slate-900 border-white/20 text-white shadow-black/50' : 'bg-white border-brand-bold/20 text-slate-900 shadow-slate-200'} w-[90%] sm:w-auto font-black font-black`}><div className={toast.type === 'error' ? 'text-rose-500' : 'text-brand-bold'}><Icon name={toast.type === 'error' ? 'info' : 'check-circle'} size={24}/></div><span className="font-black tracking-tight text-xs sm:text-sm uppercase italic text-left font-black font-black font-black font-black font-black">{toast.message}</span></div>
           )}
         </div>
       );
     }
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
   </script>
 </body>
 </html>
