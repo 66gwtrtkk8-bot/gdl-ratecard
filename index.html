@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>GDL JSC - Influencer Booking App</title>
   
+  <link rel="icon" type="image/png" href="https://drive.google.com/uc?export=view&id=1v73zMaEas1Z0ZaxHn4G0d96BhdMgcZ38" />
+  <link rel="shortcut icon" type="image/png" href="https://drive.google.com/uc?export=view&id=1v73zMaEas1Z0ZaxHn4G0d96BhdMgcZ38" />
+  
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -470,7 +473,7 @@
               </div>
               {bio && <p className="text-[9px] sm:text-[11px] text-slate-500 line-clamp-2 mb-2 sm:mb-4 italic min-h-[26px] sm:min-h-[32px] font-normal tracking-tight leading-snug">"{bio}"</p>}
               
-              <div className={`flex flex-col sm:flex-row items-start sm:items-center sm:justify-between p-2 sm:p-3 rounded-lg sm:rounded-2xl mb-2 sm:mb-4 gap-1.5 sm:gap-0 ${theme === 'dark' ? 'bg-slate-950' : 'bg-slate-50'}`}>
+              <div className={`mt-auto flex flex-col sm:flex-row items-start sm:items-center sm:justify-between p-2 sm:p-3 rounded-lg sm:rounded-2xl mb-2 sm:mb-4 gap-1.5 sm:gap-0 ${theme === 'dark' ? 'bg-slate-950' : 'bg-slate-50'}`}>
                 <div className="flex flex-col text-left"><span className="text-[7px] sm:text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Booking</span><span className="text-[10px] sm:text-xs text-brand-bold">{pricePost > 0 ? formatVND(pricePost) : 'Liên hệ'}</span></div>
                 <div className="flex flex-col text-left sm:items-end sm:text-right"><span className="text-[7px] sm:text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Followers</span><span className="text-[8px] sm:text-[10px] font-black italic">{followers > 0 ? fmtNum(followers) : 'N/A'}</span></div>
               </div>
